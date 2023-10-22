@@ -7,6 +7,7 @@ import (
   "crypto/rand"
   "io"
   "time"
+  "bytes"
 )
 
 const (
@@ -30,9 +31,9 @@ func (fs *FileServer) start() {
 }
 
 func (fs FileServer) readConn(conn net.Conn) {
-  buf := make([]byte, 2048)
+  buf := new(bytes.Buffer)
   for {
-    n, err := conn.Read(buf)
+    n, err := io.CopyN(buf, conn, int64(40000))
     if err != nil {
       log.Fatal(err)
     }
@@ -40,18 +41,20 @@ func (fs FileServer) readConn(conn net.Conn) {
   }
 }
 
-func sendFile(size int) error { // imitate a file
+func sendFile(size int) (err error) { // imitate a file
   file := make([]byte, size)
-  _, err := io.ReadFull(rand.Reader, file)
+  _, err = io.ReadFull(rand.Reader, file)
   if err != nil {
     return err
   }
   conn, err := net.Dial("tcp", PORT)
   if err != nil {
-    return err
+    return
   }
-  var n int
-  n, err = conn.Write(file)
+  n, err := io.CopyN(conn, bytes.NewReader(file), int64(size))
+  if err != nil {
+    return
+  }
   fmt.Printf("written %d bytes over the network\n", n)
   return nil
 }
@@ -59,7 +62,7 @@ func sendFile(size int) error { // imitate a file
 func main() {
   go func() {
     time.Sleep(3 * time.Second)
-    sendFile(1000)
+    sendFile(40000)
   }()
   server := &FileServer{}
   server.start()
